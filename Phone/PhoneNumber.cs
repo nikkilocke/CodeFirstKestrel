@@ -205,12 +205,12 @@ namespace Phone {
 		/// </summary>
 		public void ImportSave(UploadedFile file, int analysis, string prefix) {
 			Utils.Check(Database.Get("Analysis", analysis) != null, "You must choose an analysis code");
-			Method = "import";		// Show import.tmpl again
+			Method = "import";      // Show import.tmpl again
+			string[] lines = file.Content().Split('\n');
 			new BatchJob(this, delegate () {
 				int lineNo = 0;
 				try {
 					string name = "";
-					string[] lines = file.Content.Split('\n');
 					Batch.Records = lines.Length;
 					foreach (string l in lines) {
 						Batch.Record = lineNo++;

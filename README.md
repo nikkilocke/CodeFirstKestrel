@@ -1,4 +1,6 @@
-# CodeFirstWebFramework Web App development tool
+# CodeFirstKestrel Web App development tool
+
+This is a fork of CodeFirstWebFramework which uses the Microsoft Kestrel web server as its underlying web engine. User code is mostly compatible with that written for CodeFirstWebFramework, but new, incompatible facilities will be built in eventually.
 
 Now available as a NuGet package, downloadable directly from Visual Studio.
 
@@ -9,7 +11,7 @@ This DLL enables you to build a highly functional C# web app with minimal coding
 
 This will load (or create) the config file, analyse the code for classes which should be persisted to the database, ensure the database schema is up to date with the code, and start listening for web requests on the default port (8080).
 
-The database is a local SQLite database by default, but can be set (in the config file) to any accessable MySql or Sql Server database. The default port and a number of other settings can also be overridden in the config file.
+The database is a local SQLite database by default, but can be set (in the config file) to any accessable MySql or Mariadb database. The default port and a number of other settings can also be overridden in the config file.
 
 The web server will serve any html or other files placed in a subfolder with the same name as the main namespace of your project.
 

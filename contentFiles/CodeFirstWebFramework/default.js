@@ -244,7 +244,8 @@ $(function () {
 		var focusInput;
 		$('body').on('focus', ':input', function () {
 			focusInput = this;
-			$(this).select();
+			if (!$(this).is('textarea'))
+				$(this).select();
 		}).on('mouseup', ':input', function (e) {
 			if (focusInput == this) {
 				focusInput = null;
@@ -328,7 +329,7 @@ function setFocusToFirstInputField() {
 	var focusField = $(':input[autofocus]:enabled:visible:first');
 	if (focusField.length == 0)
 		focusField = $(':input:enabled:visible:not(button):first');
-	focusField.focus().select();
+	focusField.focus();
 }
 
 $(window).on("load", resize);
@@ -2929,14 +2930,14 @@ function makeListForm(selector, options) {
 				// Success
 				if (callback && callback(d, true))
 					return;
-				if (result.submitCallback)
-					result.submitCallback(d);
+				if (table.submitCallback)
+					table.submitCallback(d);
 			}, function (d) {
 				// Failure
 				if (callback && callback(d, false))
 					return;
-				if (result.submitCallback)
-					result.submitCallback(d);
+				if (table.submitCallback)
+					table.submitCallback(d);
 			});
 		};
 	}
@@ -2995,6 +2996,8 @@ function makeListForm(selector, options) {
 			}
 			if (col.sClass)
 				cell.attr('class', col.sClass);
+			if (col["@class"])
+				cell.addClass(col["@class"]);
 		}
 		columns[col.name] = col;
 		col.index = index;
@@ -3329,6 +3332,7 @@ function makeListForm(selector, options) {
 	};
 	refresh();
 	Forms.push(table);
+	table.owningForm = table;
 	return table;
 }
 

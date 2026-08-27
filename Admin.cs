@@ -1,10 +1,11 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
-using Newtonsoft.Json.Linq;
+using System.Linq;
 using System.Security.Policy;
 using System.Web;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CodeFirstWebFramework {
 	/// <summary>
@@ -118,13 +119,13 @@ namespace CodeFirstWebFramework {
 		/// </summary>
 		public void Restore() {
 			if (module.PostParameters != null && module.PostParameters["file"] != null) {
+				UploadedFile data = module.PostParameters.As<UploadedFile>("file");
+				JObject d = data.Content().JsonTo<JObject>();
 				new AppModule.BatchJob(module, delegate () {
 					module.Batch.Status = "Loading new data";
-					UploadedFile data = module.PostParameters.As<UploadedFile>("file");
 					try {
 						module.Database.Logging = false;
 						module.Database.BeginTransaction();
-						JObject d = data.Content.JsonTo<JObject>();
 						List<Table> tables = module.Database.TableNames.Select(n => module.Database.TableFor(n)).ToList();
 						module.Batch.Records = tables.Count * 4;
 						foreach (Table t in tables) {
@@ -424,7 +425,7 @@ namespace CodeFirstWebFramework {
 		public User LoginNoRedirect() {
 			if (module.Method == "logout")
 				module.Session.User = null;
-			if (module.Request.HttpMethod == "POST") {
+			if (module.Request.Method == "POST") {
 				string login = module.Parameters.AsString("login").Trim();
 				string password = module.Parameters.AsString("password");
 				module.Message = "Login name not found or password invalid";

@@ -1,20 +1,21 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Net;
-using System.Web;
-using System.IO;
-using System.Reflection;
-using System.Threading;
+using Microsoft.AspNetCore.Http;
 using Mustache;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Security.Policy;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
+using System.Security.Policy;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
 
 namespace CodeFirstWebFramework {
 	/// <summary>
@@ -235,7 +236,7 @@ namespace CodeFirstWebFramework {
 		/// <summary>
 		/// The Context from the web request that created this AppModule
 		/// </summary>
-		public HttpListenerContext Context;
+		public HttpContext Context;
 
 		/// <summary>
 		/// Any exception thrown handling a web request
@@ -300,16 +301,21 @@ namespace CodeFirstWebFramework {
 		public JObject PostParameters;
 
 		/// <summary>
+		/// If a file is posted, it is store here, for ease of access
+		/// </summary>
+		public Dictionary<string, UploadedFile> Files;
+
+		/// <summary>
 		/// The Web Request (from Context)
 		/// </summary>
-		public HttpListenerRequest Request {
+		public HttpRequest Request {
 			get { return Context.Request; }
 		}
 
 		/// <summary>
 		/// The Web Response (from Context)
 		/// </summary>
-		public HttpListenerResponse Response {
+		public HttpResponse Response {
 			get { return Context.Response; }
 		}
 
@@ -676,7 +682,7 @@ namespace CodeFirstWebFramework {
 		/// <summary>
 		/// Responds to a Url request. Set up the AppModule variables and call the given method
 		/// </summary>
-		public void Call(HttpListenerContext context, string moduleName, string methodName) {
+		public void Call(HttpContext context, string moduleName, string methodName) {
 			Context = context;
 			Log("({0}) ", Server.ServerName);
 			OriginalModule = Module = moduleName.ToLower();
@@ -686,55 +692,35 @@ namespace CodeFirstWebFramework {
 				LogString.Append(Session.User.Login + ":");
 			// Collect get parameters
 			GetParameters = new NameValueCollection();
-			for (int i = 0; i < Request.QueryString.Count; i++) {
-				string key = Request.QueryString.GetKey(i);
-				string value = Request.QueryString[i];
-				if (key == null) {
-					GetParameters[value] = "";
+			foreach(var q in Request.Query) {
+				if (q.Key == null) {
+					GetParameters[q.Value] = "";
 				} else {
-					if (key == "message") {
-						string m = Session.TakeMessage(value);
-						if(m != null)
+					if (q.Key == "message") {
+						string m = Session.TakeMessage(q.Value);
+						if (m != null)
 							Message = m;
 					} else
-						GetParameters[key] = value;
+						GetParameters[q.Key] = q.Value;
 				}
 			}
 			// Add into parameters array
 			Parameters.AddRange(GetParameters);
 			// Collect POST parameters
-			if (context.Request.HttpMethod == "POST") {
+			if (Request.Method == "POST") {
 				PostParameters = new JObject();
-				if (context.Request.ContentType != null) {
-					string data;
-					// Encoding 1252 will give exactly 1 character per input character, without translation
-					using (StreamReader s = new StreamReader(context.Request.InputStream, Encoding.GetEncoding(1252))) {
-						data = s.ReadToEnd();
+				if (Request.HasFormContentType) {
+					foreach (var k in Request.Form.Files) {
+						if (Files == null)
+							Files = new Dictionary<string, UploadedFile>();
+						UploadedFile f = new UploadedFile(Request, k.Name, k.FileName);
+						Files[k.Name] = f;
+						PostParameters.Add(k.Name, f.ToJToken());
 					}
-					if (context.Request.ContentType.StartsWith("multipart/form-data")) {
-						string boundary = Regex.Split(context.Request.ContentType, "boundary=")[1].Trim();
-						if (boundary.StartsWith("\"") && boundary.EndsWith("\""))
-							boundary = boundary.Substring(1, boundary.Length - 2);
-						boundary = "--" + boundary;
-						foreach (string part in Regex.Split("\r\n" + data, ".." + boundary, RegexOptions.Singleline)) {
-							if (part.Trim() == "" || part.Trim() == "--") continue;
-							int pos = part.IndexOf("\r\n\r\n");
-							string headers = part.Substring(0, pos);
-							string value = part.Substring(pos + 4);
-							Match match = new Regex(@"form-data; name=""?(\w+)""?").Match(headers);
-							if (match.Success) {
-								// This is a file upload
-								string field = match.Groups[1].Value;
-								match = new Regex(@"; filename=""(.*)""").Match(headers);
-								if (match.Success) {
-									PostParameters.Add(field, new UploadedFile(Path.GetFileName(match.Groups[1].Value), value).ToJToken());
-								} else {
-									PostParameters.Add(field, ConvertEncoding(value));
-								}
-							}
-						}
-					} else {
-						PostParameters.AddRange(HttpUtility.ParseQueryString(ConvertEncoding(data)));
+					foreach (var k in Request.Form) {
+						if (Files != null && Files.ContainsKey(k.Key))
+							continue;
+						PostParameters.Add(k.Key, k.Value.ToString());
 					}
 					Parameters.AddRange(PostParameters);
 					if (CodeFirstWebFramework.Log.PostData.On) {
@@ -756,7 +742,7 @@ namespace CodeFirstWebFramework {
 				}
 				if (!ResponseSent) {
 					// Method has not sent a response - do the default response
-					Response.AddHeader("Expires", DateTime.UtcNow.ToString("R"));
+					Response.Headers["Expires"] =  DateTime.UtcNow.ToString("R");
 					if (method.ReturnType == typeof(void)) {
 						Respond();                                  // Builds response from template
 					} else if (o is BaseForm) {
@@ -1269,19 +1255,14 @@ namespace CodeFirstWebFramework {
 			if (ResponseSent) throw new CheckException("Response already sent");
 			ResponseSent = true;
 			if (!CacheAllowed) {
-				Response.AddHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-				Response.AddHeader("Pragma", "no-cache");
-				Response.AddHeader("Expires", "0");
+				Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+				Response.Headers["Pragma"] = "no-cache";
+				Response.Headers["Expires"] = "0";
 			}
 			Response.StatusCode = (int)status;
 			if(status >= HttpStatusCode.BadRequest)
-				CodeFirstWebFramework.Log.NotFound.WriteLine("{0} {1}:{2}:Response {3} {4}",
-				Request.RemoteEndPoint.Address,
-				Request.Headers["X-Forwarded-For"],
-				Request.Url,
-				(int)status,
-				status);
-			Response.ContentEncoding = Encoding;
+				CodeFirstWebFramework.Log.NotFound.WriteLine($"{Context.Connection.RemoteIpAddress} {Request.Headers["X-Forwarded-For"]}:{Request.Url}:Response {(int)status} {status}");
+//			Response.ContentEncoding = Encoding;
 			if(contentType != null && contentType.Split('/')[0] == "text" && !contentType.Contains("charset"))
 				contentType += ";charset=" + Charset;
 			string logStatus = status.ToString();
@@ -1290,11 +1271,9 @@ namespace CodeFirstWebFramework {
 				if (o is Stream) {
 					// Stream is sent unchanged
 					Response.ContentType = contentType ?? "application/binary";
-					Response.ContentLength64 = ((Stream)o).Length;
-					Log("{0}:{1} bytes ", status, Response.ContentLength64);
-					using (Stream r = Response.OutputStream) {
-						((Stream)o).CopyTo(r);
-					}
+					Response.ContentLength = ((Stream)o).Length;
+					Log("{0}:{1} bytes ", status, Response.ContentLength);
+					((Stream)o).CopyTo(Response.Body);
 					return;
 				} else if (o is string) {
 					// String is sent unchanged
@@ -1314,11 +1293,9 @@ namespace CodeFirstWebFramework {
 				msg = Encoding.GetBytes("Operation complete");
 				Response.ContentType = contentType ?? "text/plain;charset=" + Charset;
 			}
-			Response.ContentLength64 = msg.Length;
-			Log("{0}:{1} bytes ", logStatus, Response.ContentLength64);
-			using (Stream r = Response.OutputStream) {
-				r.Write(msg, 0, msg.Length);
-			}
+			Response.ContentLength = msg.Length;
+			Log("{0}:{1} bytes ", logStatus, Response.ContentLength);
+			Response.Body.Write(msg, 0, msg.Length);
 		}
 
 		/// <summary>
@@ -1419,32 +1396,39 @@ namespace CodeFirstWebFramework {
 	/// Class to hold details of an uploaded file (from an &lt;input type="file" /&gt;)
 	/// </summary>
 	public class UploadedFile {
+		[JsonIgnore]
+		HttpRequest _request;
 
 		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="name">field name</param>
 		/// <param name="content">file data</param>
-		public UploadedFile(string name, string content) {
+		public UploadedFile(HttpRequest request, string key, string name) {
+			_request = request;
+			Key = key;
 			Name = name;
-			Content = content;
 		}
 
-		/// <summary>
-		/// File contents - Windows1252 was used to read it in, so saving it as Windows1252 will be an exact binary copy
-		/// </summary>
-		public string Content { get; set; }
+		public string Content() {
+			return new StreamReader(Stream()).ReadToEnd();
+		}
 
 		/// <summary>
 		/// Field name
 		/// </summary>
-		public string Name { get; set; }
+		public string Key { get; }
+
+		/// <summary>
+		/// File name
+		/// </summary>
+		public string Name { get; }
 
 		/// <summary>
 		/// The file contents as a stream
 		/// </summary>
 		public Stream Stream() {
-			return new MemoryStream(Encoding.GetEncoding(1252).GetBytes(Content));
+			return _request.Form.Files[Key].OpenReadStream();
 		}
 	}
 

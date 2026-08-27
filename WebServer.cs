@@ -1,24 +1,32 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Mustache;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Org.BouncyCastle.Asn1.Ocsp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net;
 using System.Web;
-using System.IO;
-using System.Reflection;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 
 namespace CodeFirstWebFramework {
 	/// <summary>
 	/// Web Server - listens for connections, and services them
 	/// </summary>
 	public class WebServer {
-		HttpListener _listener;
-		bool _running;
+		WebApplication _app;
 		Dictionary<string, Session> _sessions;
 		static object _lock = new object();
 		Dictionary<string, Namespace> webmodules;      // All the different web modules we are running
@@ -57,7 +65,7 @@ namespace CodeFirstWebFramework {
 			if (webmodules.ContainsKey(server.Namespace)) {
 				server.NamespaceDef = webmodules[server.Namespace];
 			} else {
-				foreach(string assembly in server.AdditionalAssemblies) {
+				foreach (string assembly in server.AdditionalAssemblies) {
 					if (loadedAssemblies.Contains(assembly))
 						continue;
 					Assembly.Load(assembly);
@@ -90,21 +98,10 @@ namespace CodeFirstWebFramework {
 		/// </summary>
 		public void Start() {
 			try {
-				_listener = new HttpListener();
-				HashSet<int> ports = new HashSet<int>();
-				ports.Add(Config.Default.Port);
-				foreach (ServerConfig server in Config.Default.Servers) {
-					if (server.Port > 0)
-						ports.Add(server.Port);
-				}
-				foreach (int port in ports) {
-					_listener.Prefixes.Add("http://+:" + port + "/");
-					Log.Startup.WriteLine("Listening on port {0}", port);
-				}
 				_sessions = new Dictionary<string, Session>();
 				// Start thread to expire sessions after 30 mins of inactivity
 				new Task(delegate () {
-					for (;;) {
+					for (; ; ) {
 						Thread.Sleep(Config.Default.SessionExpiryMinutes * 1000);
 						DateTime now = Utils.Now;
 						lock (_sessions) {
@@ -118,17 +115,32 @@ namespace CodeFirstWebFramework {
 						}
 					}
 				}).Start();
-				_running = true;
-				_listener.Start();
-				while (_running) {
+				WebApplicationBuilder builder = WebApplication.CreateBuilder();
+				HashSet<int> ports = new HashSet<int>();
+				ports.Add(Config.Default.Port);
+				foreach (ServerConfig server in Config.Default.Servers) {
+					if (server.Port > 0)
+						ports.Add(server.Port);
+				}
+				builder.WebHost.ConfigureKestrel(options => {
+					foreach (int port in ports) {
+						options.ListenAnyIP(port, listenOptions => {
+							// Forces Kestrel to accept HTTP/1.1, HTTP/2, or HTTP/3 on the same port
+							listenOptions.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
+						});
+						Log.Startup.WriteLine("Listening on port {0}", port);
+					}
+					options.AllowSynchronousIO = true;
+				});
+
+				_app = builder.Build();
+				_app.Run(async context => {
 					try {
-						HttpListenerContext request = _listener.GetContext();
-						ThreadPool.QueueUserWorkItem(ProcessRequest, request);
+						await ProcessRequest(context);
 					} catch {
 					}
-				}
-			} catch (HttpListenerException ex) {
-				Log.Error.WriteLine(ex.ToString());
+				});
+				_app.Run();
 			} catch (ThreadAbortException) {
 			} catch (Exception ex) {
 				Log.Error.WriteLine(ex.ToString());
@@ -139,8 +151,7 @@ namespace CodeFirstWebFramework {
 		/// Stop the server
 		/// </summary>
 		public void Stop() {
-			_running = false;
-			_listener.Stop();
+			_app.StopAsync().RunSynchronously();
 		}
 
 		/// <summary>
@@ -156,27 +167,20 @@ namespace CodeFirstWebFramework {
 		/// Process a single request
 		/// </summary>
 		/// <param name="listenerContext"></param>
-		void ProcessRequest(object listenerContext) {
-			DateTime started = DateTime.Now;			// For timing response
-			HttpListenerContext context = null;
+		async Task ProcessRequest(HttpContext context) {
+			DateTime started = DateTime.Now;            // For timing response
 			AppModule module = null;
-			StringBuilder log = new StringBuilder();	// Session log writes to here, and it is displayed at the end
-			context = (HttpListenerContext)listenerContext;
+			StringBuilder log = new StringBuilder();    // Session log writes to here, and it is displayed at the end
 			ServerConfig server = Config.Default.SettingsForHost(context.Request.Url);
-			log.AppendFormat("{0} {1}:{2}:[ms]:",
-				context.Request.RemoteEndPoint.Address,
-				context.Request.Headers["X-Forwarded-For"],
-				context.Request.Url.OriginalString);
+			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{context.Request.Url}:[ms]:");
 			if (server == null) {
 				// Request not matching any of the Server array, and not on the default port
+				var response = "Server not found";
+				context.Response.ContentLength = response.Length;
+				context.Response.ContentType = "text/plain";
 				context.Response.StatusCode = 404;
-				context.Response.ContentType = "text/plain;charset=" + AppModule.Charset;
-				byte[] msg = AppModule.Encoding.GetBytes("Server not found");
-				context.Response.ContentLength64 = msg.Length;
-				log.Append("404 Server not found ");
-				using (Stream r = context.Response.OutputStream) {
-					r.Write(msg, 0, msg.Length);
-				}
+				await context.Response.WriteAsync(response);
+				return;
 			} else {
 				Session session = null;
 				try {
@@ -201,11 +205,11 @@ namespace CodeFirstWebFramework {
 						module = server.NamespaceDef.GetInstanceOf<FileSender>(filename);
 					}
 					// AppModule found - retrieve or create a session for it
-					Cookie cookie = context.Request.Cookies["session"];
-					if(cookie == null) {
-						string hdr = context.Request.Headers.Get("Authorization");
+					string cookie = context.Request.Cookies["session"];
+					if (cookie == null) {
+						string hdr = context.Request.Headers["Authorization"];
 						if (!string.IsNullOrEmpty(hdr) && hdr.StartsWith("Bearer "))
-							cookie = new Cookie("session", hdr.Substring(7).Trim(), "/");
+							cookie = hdr.Substring(7).Trim();
 					}
 					// Set up module
 					module.Server = server;
@@ -213,22 +217,23 @@ namespace CodeFirstWebFramework {
 					module.LogString = log;
 					module.GenerateNonce();
 					if (cookie != null) {
-						if (!_sessions.TryGetValue(cookie.Value, out session) && server.PersistentSessions)
-							session = Session.FromStore(this, module, cookie.Value);
-						Log.Session.WriteLine("[{0}{1}]", cookie.Value, session == null ? " not found" : "");
+						if (!_sessions.TryGetValue(cookie, out session) && server.PersistentSessions)
+							session = Session.FromStore(this, module, cookie);
+						Log.Session.WriteLine("[{0}{1}]", cookie, session == null ? " not found" : "");
 					}
 					if (session == null) {
 						if (moduleName == "FileSender") {
 							session = server.NamespaceDef.GetInstanceOf<Session>();
 						} else {
 							session = server.NamespaceDef.GetInstanceOf<Session>(this, server);
-							cookie = new Cookie("session", session.Cookie, "/");
-							Log.Session.WriteLine("[{0} new session]", cookie.Value);
+							cookie = session.Cookie;
+							Log.Session.WriteLine("[{0} new session]", cookie);
 						}
 					}
 					if (cookie != null) {
-						context.Response.Cookies.Add(cookie);
-						cookie.Expires = session.Expires = Utils.Now.AddMinutes(server.CookieTimeoutMinutes);
+						context.Response.Cookies.Append("session", cookie, new CookieOptions() {
+							Expires = session.Expires = Utils.Now.AddMinutes(server.CookieTimeoutMinutes)
+						});
 					}
 					module.Session = session;
 					if (moduleName.EndsWith("Module"))
@@ -284,17 +289,19 @@ namespace CodeFirstWebFramework {
 							else if (server.PersistentSessions)
 								session.ToStore(server);
 						}
-					} catch(Exception ex) {
+					} catch (Exception ex) {
 						System.Diagnostics.Debug.WriteLine("Session save error:" + ex);
 					}
 				}
 			}
+#if false
 			if (context != null) {
 				try {
 					context.Response.Close();
 				} catch {
 				}
 			}
+#endif
 			try {
 				Log.Info.WriteLine(log.ToString().Replace(":[ms]:", ":" + Math.Round((DateTime.Now - started).TotalMilliseconds, 0) + " ms:"));
 			} catch {
@@ -445,7 +452,7 @@ namespace CodeFirstWebFramework {
 					Messages = new List<MessageInfo>();
 				else {
 					// Get rid of messages more than a day old
-					lock(Object) {
+					lock (Object) {
 						int old = MessageInfo.Days(DateTime.Today.AddDays(-1));
 						while (Messages.Count > 0 && Messages[0].Date < old)
 							Messages.RemoveAt(0);
@@ -472,7 +479,8 @@ namespace CodeFirstWebFramework {
 				if (Messages == null)
 					return null;
 				MessageInfo r = Messages.FirstOrDefault(m => m.Handle == handle);
-				if(r == null) return null;
+				if (r == null)
+					return null;
 				Messages.Remove(r);
 				return r.Text;
 			}
@@ -523,4 +531,25 @@ namespace CodeFirstWebFramework {
 
 	}
 
+	public static class KestrelExtensions {
+
+		extension(HttpRequest r) {
+			public Uri Url {
+				get {
+					string url = r.GetDisplayUrl();
+					//			if (context.Request.QueryString.HasValue)
+					//				url += context.Request.QueryString.Value;
+					return new Uri(url);
+				}
+			}
+
+		}
+
+		extension(HttpResponse r) {
+			public void AddHeader(string name, string value) {
+				r.Headers[name] = value;
+			}
+		}
+
+	}
 }
