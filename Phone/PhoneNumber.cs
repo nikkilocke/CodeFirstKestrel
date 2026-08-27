@@ -206,7 +206,7 @@ namespace Phone {
 		public void ImportSave(UploadedFile file, int analysis, string prefix) {
 			Utils.Check(Database.Get("Analysis", analysis) != null, "You must choose an analysis code");
 			Method = "import";      // Show import.tmpl again
-			string[] lines = file.Content().Split('\n');
+			string[] lines = file.Content.Split('\n');
 			new BatchJob(this, delegate () {
 				int lineNo = 0;
 				try {

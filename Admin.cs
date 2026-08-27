@@ -120,7 +120,7 @@ namespace CodeFirstWebFramework {
 		public void Restore() {
 			if (module.PostParameters != null && module.PostParameters["file"] != null) {
 				UploadedFile data = module.PostParameters.As<UploadedFile>("file");
-				JObject d = data.Content().JsonTo<JObject>();
+				JObject d = data.Content.JsonTo<JObject>();
 				new AppModule.BatchJob(module, delegate () {
 					module.Batch.Status = "Loading new data";
 					try {

@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
-    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	<IsPackable>true</IsPackable>
     <Authors>Nikki Locke</Authors>
     <Company>Trumphurst Ltd</Company>
     <Title>CodeFirstWebFramework</Title>
@@ -16,7 +17,7 @@
     <RepositoryUrl>https://github.com/nikkilocke/CodeFirstWebFramework</RepositoryUrl>
     <RepositoryType>Github</RepositoryType>
     <PackageTags>C# SQL Code First Web Server</PackageTags>
-    <Version>1.4.0</Version>
+    <Version>1.4.4</Version>
     <PackageReleaseNotes>Use Kestrel WebServer.</PackageReleaseNotes>
 	<DocumentationMarkdown>contentFiles/Api.md</DocumentationMarkdown>
 	<PackageLicenseUrl></PackageLicenseUrl>

@@ -1398,6 +1398,7 @@ namespace CodeFirstWebFramework {
 	public class UploadedFile {
 		[JsonIgnore]
 		HttpRequest _request;
+		MemoryStream _buffer;
 
 		/// <summary>
 		/// Constructor
@@ -1410,9 +1411,7 @@ namespace CodeFirstWebFramework {
 			Name = name;
 		}
 
-		public string Content() {
-			return new StreamReader(Stream()).ReadToEnd();
-		}
+		public string Content => new StreamReader(Stream()).ReadToEnd();
 
 		/// <summary>
 		/// Field name
@@ -1428,7 +1427,19 @@ namespace CodeFirstWebFramework {
 		/// The file contents as a stream
 		/// </summary>
 		public Stream Stream() {
-			return _request.Form.Files[Key].OpenReadStream();
+			return _buffer == null ? _request.Form.Files[Key].OpenReadStream() : _buffer;
+		}
+
+		/// <summary>
+		/// If you are going to process the file later (e.g. in a batch), this saves it (currently to a MemoryStream),
+		/// because once the original request has been processed, the data will be lost otherwise.
+		/// </summary>
+		public void BufferForReadingLater() {
+			if (_buffer == null) {
+				_buffer = new MemoryStream();
+				Stream().CopyTo(_buffer);
+				_buffer.Seek(0, SeekOrigin.Begin);
+			}
 		}
 	}
 

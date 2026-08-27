@@ -534,6 +534,25 @@ namespace CodeFirstWebFramework {
 	public static class KestrelExtensions {
 
 		extension(HttpRequest r) {
+
+			public string CallingIPAddress() {
+				return r.HttpContext.Connection.RemoteIpAddress.ToString();
+			}
+			public string HttpMethod => r.Method;
+			public bool TryGetBasicAuth(out string name, out string password) {
+				name = password = "";
+				string authhdr = r.Headers["Authorization"];
+				if (authhdr == null || !authhdr.StartsWith("Basic "))
+					return false;
+				var bytes = Convert.FromBase64String(authhdr.Substring(6));
+				authhdr = Uri.UnescapeDataString(AppModule.Encoding.GetString(bytes).Trim());
+				string[] parts = authhdr.Split(':');
+				if (parts.Length != 2)
+					return false;
+				name = parts[0];
+				password = parts[1];
+				return true;
+			}
 			public Uri Url {
 				get {
 					string url = r.GetDisplayUrl();
