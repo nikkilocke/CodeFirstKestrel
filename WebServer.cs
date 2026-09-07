@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Mustache;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -26,6 +28,7 @@ namespace CodeFirstWebFramework {
 	/// Web Server - listens for connections, and services them
 	/// </summary>
 	public class WebServer {
+		WebApplicationBuilder _builder;
 		WebApplication _app;
 		Dictionary<string, Session> _sessions;
 		static object _lock = new object();
@@ -39,7 +42,8 @@ namespace CodeFirstWebFramework {
 		/// Sets up all servers specified in the config file, loading any additional assemblies required.
 		/// Upgrades all databases to match the latest code.
 		/// </summary>
-		public WebServer() {
+		/// <param name="builderCallback">Optional callback which allows you to change the build options for the Kestrel Web Server</param>
+		public WebServer(Action<WebApplicationBuilder> builderCallback = null) {
 			try {
 				AppVersion = Assembly.GetEntryAssembly().GetName().Version.ToString();
 				VersionSuffix = "-v" + AppVersion;
@@ -51,11 +55,45 @@ namespace CodeFirstWebFramework {
 					registerServer(server);
 				}
 				registerServer(Config.Default.DefaultServer);
+				_builder = WebApplication.CreateBuilder();
+				HashSet<int> ports = new HashSet<int>();
+				ports.Add(Config.Default.Port);
+				foreach (ServerConfig server in Config.Default.Servers) {
+					if (server.Port > 0)
+						ports.Add(server.Port);
+				}
+				_builder.WebHost.ConfigureKestrel(options => {
+					foreach (int port in ports) {
+						options.ListenAnyIP(port, listenOptions => {
+							// Forces Kestrel to accept HTTP/1.1, HTTP/2, or HTTP/3 on the same port
+							listenOptions.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
+						});
+						Log.Startup.WriteLine("Listening on port {0}", port);
+					}
+					options.AllowSynchronousIO = true;
+				});
+				// Turn off MS Logging
+				_builder.Logging.ClearProviders();
+				if (builderCallback != null)
+					builderCallback(_builder);
+				_app = _builder.Build();
 			} catch (Exception ex) {
 				Log.Error.WriteLine(ex.ToString());
 				throw;
 			}
 		}
+
+#if false
+		public static void AddAppModuleFactory<Module>(WebApplicationBuilder builder) where Module : AppModule, new() {
+			ServiceDescriptor s = new ServiceDescriptor(typeof(Module), (IServiceProvider o) => CreateAppModule<Module>(o), ServiceLifetime.Scoped);
+			builder.Services.Add(s);
+		}
+
+		static Module CreateAppModule<Module>(IServiceProvider o) where Module : AppModule, new() {
+			Module m = new Module();
+			return m;
+		}
+#endif
 
 		/// <summary>
 		/// Add namespace to modules list, and upgrade database, if not done already.
@@ -94,6 +132,11 @@ namespace CodeFirstWebFramework {
 		static public string VersionSuffix;
 
 		/// <summary>
+		/// Access to the underlying Kestrel WebServer
+		/// </summary>
+		public WebApplication Kestrel => _app;
+
+		/// <summary>
 		/// Start WebServer listening for connections
 		/// </summary>
 		public void Start() {
@@ -115,30 +158,14 @@ namespace CodeFirstWebFramework {
 						}
 					}
 				}).Start();
-				WebApplicationBuilder builder = WebApplication.CreateBuilder();
-				HashSet<int> ports = new HashSet<int>();
-				ports.Add(Config.Default.Port);
-				foreach (ServerConfig server in Config.Default.Servers) {
-					if (server.Port > 0)
-						ports.Add(server.Port);
-				}
-				builder.WebHost.ConfigureKestrel(options => {
-					foreach (int port in ports) {
-						options.ListenAnyIP(port, listenOptions => {
-							// Forces Kestrel to accept HTTP/1.1, HTTP/2, or HTTP/3 on the same port
-							listenOptions.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
-						});
-						Log.Startup.WriteLine("Listening on port {0}", port);
-					}
-					options.AllowSynchronousIO = true;
-				});
-
-				_app = builder.Build();
-				_app.Run(async context => {
-					try {
-						await ProcessRequest(context);
-					} catch {
-					}
+				_app.Use(async (HttpContext context, RequestDelegate next) => {
+					if (context.GetEndpoint() == null)
+						try {
+							await ProcessRequest(context);
+						} catch {
+						}
+					else
+						await next(context);
 				});
 				_app.Run();
 			} catch (ThreadAbortException) {

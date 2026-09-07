@@ -1,11 +1,13 @@
-﻿using System;
+﻿using CodeFirstWebFramework;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
-using CodeFirstWebFramework;
 
 namespace Phone {
 	class Program {
@@ -30,7 +32,9 @@ namespace Phone {
 					}
 					break;
 			}
-			new WebServer().Start();
+			WebServer server = new WebServer();
+			server.Start();
 		}
+
 	}
 }

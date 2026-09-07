@@ -110,7 +110,7 @@ namespace CodeFirstWebFramework {
 		/// </summary>
 		public string LegacyHashPassword(string password) {
 			Encoding enc = Encoding.GetEncoding(1252);
-			return Convert.ToBase64String(new SHA1CryptoServiceProvider().ComputeHash(enc.GetBytes(password)));
+			return Convert.ToBase64String(SHA1.HashData(enc.GetBytes(password)));
 		}
 
 		/// <summary>

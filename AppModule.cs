@@ -831,11 +831,7 @@ namespace CodeFirstWebFramework {
 							// Plain parameter - convert directly
 							o = val.ToObject(p.ParameterType);
 						} else if (p.ParameterType == typeof(UploadedFile)) {
-							// Uploaded file - "null" means null
-							if (val.ToString() == "null")
-								o = null;
-							else
-								o = val.ToObject(typeof(UploadedFile));
+							o = Files.TryGetValue(p.Name, out UploadedFile f) ? f : null;
 						} else if (val.Type == JTokenType.String && val.ToString() == "null") {
 							o = null;       // "null" means null for any other type too
 						} else if (p.ParameterType == typeof(int?)
