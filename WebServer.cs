@@ -198,7 +198,10 @@ namespace CodeFirstWebFramework {
 			DateTime started = DateTime.Now;            // For timing response
 			AppModule module = null;
 			StringBuilder log = new StringBuilder();    // Session log writes to here, and it is displayed at the end
-			ServerConfig server = Config.Default.SettingsForHost(context.Request.Url);
+
+			UriBuilder b = new UriBuilder(context.Request.Url);
+			b.Port = context.Connection.LocalPort;	// Change port to the actual port we are listening on, as we are searching the local config
+			ServerConfig server = Config.Default.SettingsForHost(b.Uri);
 			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{context.Request.Url}:[ms]:");
 			if (server == null) {
 				// Request not matching any of the Server array, and not on the default port
@@ -585,6 +588,7 @@ namespace CodeFirstWebFramework {
 					string url = r.GetDisplayUrl();
 					//			if (context.Request.QueryString.HasValue)
 					//				url += context.Request.QueryString.Value;
+
 					return new Uri(url);
 				}
 			}
