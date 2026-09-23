@@ -202,10 +202,10 @@ namespace CodeFirstWebFramework {
 			UriBuilder b = new UriBuilder(context.Request.Url);
 			b.Port = context.Connection.LocalPort;	// Change port to the actual port we are listening on, as we are searching the local config
 			ServerConfig server = Config.Default.SettingsForHost(b.Uri);
-			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{context.Request.Url}:[ms]:");
+			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{b.Uri}:[ms]:");
 			if (server == null) {
 				// Request not matching any of the Server array, and not on the default port
-				string response = "Server not found:" + context.Request.Url;
+				string response = "Server not found:" + b.Uri;
 				context.Response.ContentLength = response.Length;
 				context.Response.ContentType = "text/plain";
 				context.Response.StatusCode = 404;
@@ -214,7 +214,7 @@ namespace CodeFirstWebFramework {
 			} else {
 				Session session = null;
 				try {
-					ModuleInfo info = webmodules[server.Namespace].ParseUri(context.Request.Url.AbsolutePath, out string filename);
+					ModuleInfo info = webmodules[server.Namespace].ParseUri(b.Uri.AbsolutePath, out string filename);
 					string moduleName = null;
 					string methodName = null;
 					// Urls of the form /ModuleName[/MethodName][.html] call a C# AppModule

@@ -17,8 +17,8 @@
     <RepositoryUrl>https://github.com/nikkilocke/CodeFirstWebFramework</RepositoryUrl>
     <RepositoryType>Github</RepositoryType>
     <PackageTags>C# SQL Code First Web Server</PackageTags>
-    <Version>1.4.7</Version>
-    <PackageReleaseNotes>Use Kestrel WebServer.</PackageReleaseNotes>
+    <Version>1.4.8</Version>
+    <PackageReleaseNotes>Fix uri to use local port, as before.</PackageReleaseNotes>
 	<DocumentationMarkdown>contentFiles/Api.md</DocumentationMarkdown>
 	<PackageLicenseUrl></PackageLicenseUrl>
 	<PackageLicenseFile>license.txt</PackageLicenseFile>
