@@ -202,7 +202,7 @@ namespace CodeFirstWebFramework {
 			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{context.Request.Url}:[ms]:");
 			if (server == null) {
 				// Request not matching any of the Server array, and not on the default port
-				var response = "Server not found";
+				string response = "Server not found:" + context.Request.Url;
 				context.Response.ContentLength = response.Length;
 				context.Response.ContentType = "text/plain";
 				context.Response.StatusCode = 404;
