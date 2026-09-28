@@ -17,8 +17,8 @@
     <RepositoryUrl>https://github.com/nikkilocke/CodeFirstWebFramework</RepositoryUrl>
     <RepositoryType>Github</RepositoryType>
     <PackageTags>C# SQL Code First Web Server</PackageTags>
-    <Version>1.4.8</Version>
-    <PackageReleaseNotes>Fix uri to use local port, as before.</PackageReleaseNotes>
+    <Version>1.4.9</Version>
+    <PackageReleaseNotes>Fix to use Append instead of AppendFormat when writing to log (some uris could throw an exception)</PackageReleaseNotes>
 	<DocumentationMarkdown>contentFiles/Api.md</DocumentationMarkdown>
 	<PackageLicenseUrl></PackageLicenseUrl>
 	<PackageLicenseFile>license.txt</PackageLicenseFile>

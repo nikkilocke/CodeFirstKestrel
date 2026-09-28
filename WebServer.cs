@@ -159,6 +159,7 @@ namespace CodeFirstWebFramework {
 					}
 				}).Start();
 				_app.Use(async (HttpContext context, RequestDelegate next) => {
+					System.Diagnostics.Debug.WriteLine("*****\n" + context.Request.GetDisplayUrl() + "\n*****");
 					if (context.GetEndpoint() == null)
 						try {
 							await ProcessRequest(context);
@@ -202,7 +203,7 @@ namespace CodeFirstWebFramework {
 			UriBuilder b = new UriBuilder(context.Request.Url);
 			b.Port = context.Connection.LocalPort;	// Change port to the actual port we are listening on, as we are searching the local config
 			ServerConfig server = Config.Default.SettingsForHost(b.Uri);
-			log.AppendFormat($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{b.Uri}:[ms]:");
+			log.Append($"{context.Connection.RemoteIpAddress} {context.Request.Headers["X-Forwarded-For"]}:{b.Uri}:[ms]:");
 			if (server == null) {
 				// Request not matching any of the Server array, and not on the default port
 				string response = "Server not found:" + b.Uri;
