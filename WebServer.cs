@@ -62,11 +62,13 @@ namespace CodeFirstWebFramework {
 					if (server.Port > 0)
 						ports.Add(server.Port);
 				}
+				HttpProtocols listenProtocol = Config.Default.Protocol;
+				if (listenProtocol == HttpProtocols.None)
+					listenProtocol = HttpProtocols.Http1AndHttp2AndHttp3;
 				_builder.WebHost.ConfigureKestrel(options => {
 					foreach (int port in ports) {
 						options.ListenAnyIP(port, listenOptions => {
-							// Forces Kestrel to accept HTTP/1.1, HTTP/2, or HTTP/3 on the same port
-							listenOptions.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
+							listenOptions.Protocols = listenProtocol;
 						});
 						Log.Startup.WriteLine("Listening on port {0}", port);
 					}

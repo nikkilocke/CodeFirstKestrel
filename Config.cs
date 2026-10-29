@@ -62,6 +62,10 @@ namespace CodeFirstWebFramework {
 		/// </summary>
 		public int Port = 8080;
 		/// <summary>
+		/// The protocols accepted
+		/// </summary>
+		public Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols Protocol;
+		/// <summary>
 		/// Log all queries that take longer than this
 		/// </summary>
 		public int SlowQuery = 100;

@@ -17,8 +17,8 @@
     <RepositoryUrl>https://github.com/nikkilocke/CodeFirstWebFramework</RepositoryUrl>
     <RepositoryType>Github</RepositoryType>
     <PackageTags>C# SQL Code First Web Server</PackageTags>
-    <Version>1.4.9</Version>
-    <PackageReleaseNotes>Fix to use Append instead of AppendFormat when writing to log (some uris could throw an exception)</PackageReleaseNotes>
+    <Version>1.4.10</Version>
+    <PackageReleaseNotes>Allow Protocol to be specified in config, so it can be forced to do http2 over TCP.</PackageReleaseNotes>
 	<DocumentationMarkdown>contentFiles/Api.md</DocumentationMarkdown>
 	<PackageLicenseUrl></PackageLicenseUrl>
 	<PackageLicenseFile>license.txt</PackageLicenseFile>
