@@ -161,7 +161,6 @@ namespace CodeFirstWebFramework {
 					}
 				}).Start();
 				_app.Use(async (HttpContext context, RequestDelegate next) => {
-					System.Diagnostics.Debug.WriteLine("*****\n" + context.Request.GetDisplayUrl() + "\n*****");
 					if (context.GetEndpoint() == null)
 						try {
 							await ProcessRequest(context);
@@ -569,7 +568,8 @@ namespace CodeFirstWebFramework {
 		extension(HttpRequest r) {
 
 			public string CallingIPAddress() {
-				return r.HttpContext.Connection.RemoteIpAddress.ToString();
+				string fwd = r.Headers["X-Forwarded-For"];
+				return string.IsNullOrWhiteSpace(fwd) ? r.HttpContext.Connection.RemoteIpAddress.ToString() : fwd.Split(" ")[0];
 			}
 			public string HttpMethod => r.Method;
 			public bool TryGetBasicAuth(out string name, out string password) {
